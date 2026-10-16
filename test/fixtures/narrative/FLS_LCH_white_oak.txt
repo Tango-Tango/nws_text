@@ -1,0 +1,61 @@
+Flood Statement
+National Weather Service Lake Charles LA
+921 PM CDT Mon Oct 12 2026
+
+...The Flood Warning continues for the following rivers in
+Louisiana...
+
+  Calcasieu River near White Oak Park affecting Calcasieu Parish.
+
+...The Flood Warning is extended for the following rivers in
+Louisiana...
+
+  Calcasieu River Near Salt Water Barrier affecting Calcasieu Parish.
+
+...The Flood Warning is cancelled for the following rivers in
+Texas...
+
+  Neches River at Neches River Saltwater Barrier affecting Jasper,
+  Orange, Hardin and Jefferson Counties.
+
+For the Calcasieu River...including Glenmora, Oakdale, Oberlin,
+Kinder, White Oak Park, Salt Water Barrier...Minor flooding is
+forecast.
+
+PRECAUTIONARY/PREPAREDNESS ACTIONS...
+
+Turn around, don't drown when encountering flooded roads. Most flood
+deaths occur in vehicles.
+
+Motorists should not attempt to drive around barricades or drive cars
+through flooded areas.
+
+Additional information is available at www.weather.gov.
+
+921 PM CDT Mon Oct 12 2026
+
+...FLOOD WARNING NOW IN EFFECT UNTIL THURSDAY AFTERNOON...
+
+* WHAT...Minor flooding is forecast.
+
+* WHERE...Calcasieu River near White Oak Park.
+
+* WHEN...Until Thursday afternoon.
+
+* IMPACTS...At 2.0 feet, Minor flooding of Goos Ferry Road will
+  occur.
+
+* ADDITIONAL DETAILS...
+  - At 8:05 PM CDT Monday the stage was 1.4 feet.
+  - Forecast...The river will oscillate around flood stage with a
+    maximum value of 2.0 feet early Wednesday morning.
+  - Flood stage is 2.0 feet.
+  - http://www.weather.gov/safety/flood
+
+&&
+
+All Times CDT  Fld     Observed          Forecasts (7 pm)
+Location       Stg   Stg   Day/Time      Tue   Wed   Thu
+
+Calcasieu River
+White Oak Park 2.0   1.4   Mon 8 pm      1.7   1.7   1.7
