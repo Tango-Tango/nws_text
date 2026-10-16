@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-16
+
 ### Added
 
 - `NwsText.parse/2` parses one NWS text product with an explicit UTC reference time: WMO header,
