@@ -89,6 +89,9 @@ mix format --check-formatted
 mix credo --strict
 ```
 
+Releases are made by maintainers with `scripts/release`; see
+[PUBLISHING.md](PUBLISHING.md).
+
 The test corpus contains 169 unmodified product examples from
 [pyIEM](https://github.com/akrherz/pyIEM). Its expected results are generated
 independently from the raw text, not from the parser. See

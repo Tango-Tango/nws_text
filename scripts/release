@@ -1,0 +1,245 @@
+#!/usr/bin/env bash
+# Prepare or publish a human-maintained nws_text release.
+set -euo pipefail
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$root"
+
+usage() {
+  cat <<'USAGE'
+Usage:
+  scripts/release prepare [--bump patch|feature|major] [--dry-run]
+  scripts/release publish [--dry-run] [--yes]
+
+prepare creates a release branch, commits the version and changelog, pushes it,
+and opens a draft pull request. Without --bump it prompts for the bump type.
+publish runs the local preflight, tags main, creates a draft GitHub release,
+publishes to Hex, then publishes the GitHub release.
+USAGE
+}
+
+die() {
+  echo "Error: $*" >&2
+  exit 1
+}
+
+version_from_mix() {
+  local version
+  version="$(sed -nE 's/^[[:space:]]*@version[[:space:]]+"([0-9]+\.[0-9]+\.[0-9]+)".*/\1/p' mix.exs)"
+  [[ -n "$version" ]] || die "Could not read a SemVer @version from mix.exs."
+  printf '%s\n' "$version"
+}
+
+next_version() {
+  local current="$1" bump="$2" major minor patch
+  IFS=. read -r major minor patch <<<"$current"
+
+  case "$bump" in
+    patch) printf '%s.%s.%s\n' "$major" "$minor" "$((patch + 1))" ;;
+    feature) printf '%s.%s.0\n' "$major" "$((minor + 1))" ;;
+    major) printf '%s.0.0\n' "$((major + 1))" ;;
+    *) die "Bump must be patch, feature, or major." ;;
+  esac
+}
+
+require_clean_tree() {
+  [[ -z "$(git status --porcelain)" ]] || die "Refusing to continue from a non-clean working tree."
+}
+
+require_main_up_to_date() {
+  [[ "$(git branch --show-current)" == "main" ]] || die "This action must run from the main branch."
+  git fetch origin main || die "Could not fetch origin/main; check network and Git authentication."
+  [[ "$(git rev-parse HEAD)" == "$(git rev-parse origin/main)" ]] ||
+    die "main is not up to date with origin/main. Pull or fast-forward it before continuing."
+}
+
+require_gh() {
+  command -v gh >/dev/null 2>&1 || die "GitHub CLI (gh) is required; install it and authenticate with 'gh auth login'."
+  gh auth status >/dev/null 2>&1 || die "GitHub CLI authentication failed; run 'gh auth login'."
+}
+
+require_no_tag() {
+  local tag="$1" remote_tag
+  ! git rev-parse -q --verify "refs/tags/$tag" >/dev/null || die "Tag $tag already exists locally."
+  remote_tag="$(git ls-remote --tags origin "refs/tags/$tag")" ||
+    die "Could not query tags on origin; check network and Git authentication."
+  [[ -z "$remote_tag" ]] || die "Tag $tag already exists on origin."
+}
+
+release_notes() {
+  local version="$1"
+  awk -v header="## [$version] - " '
+    index($0, header) == 1 { found = 1; next }
+    found && /^## \[/ { exit }
+    found { print }
+  ' CHANGELOG.md
+}
+
+require_release_notes() {
+  local version="$1" notes
+  notes="$(release_notes "$version")"
+  [[ -n "$(printf '%s' "$notes" | tr -d '[:space:]')" ]] ||
+    die "Missing release notes for version $version in CHANGELOG.md."
+}
+
+preflight() {
+  local artifact_dir
+  artifact_dir="$(mktemp -d)"
+  trap 'rm -rf "$artifact_dir"' RETURN
+
+  MIX_ENV=test mix deps.get
+  MIX_ENV=dev mix deps.get
+  MIX_ENV=dev mix format --check-formatted
+  MIX_ENV=test mix compile --warnings-as-errors
+  MIX_ENV=test mix test
+  MIX_ENV=dev mix credo --strict
+  MIX_ENV=dev mix docs
+  MIX_ENV=dev mix hex.build --output "$artifact_dir/nws_text.tar"
+
+  trap - RETURN
+  rm -rf "$artifact_dir"
+}
+
+rewrite_changelog() {
+  local version="$1" date="$2" changelog_tmp
+  changelog_tmp="$(mktemp)"
+
+  awk -v version="$version" -v date="$date" '
+    /^## \[Unreleased\][[:space:]]*$/ && !seen {
+      print
+      print ""
+      print "## [" version "] - " date
+      seen = 1
+      next
+    }
+    { print }
+  ' CHANGELOG.md >"$changelog_tmp"
+
+  grep -q "^## \[$version\] - $date$" "$changelog_tmp" || {
+    rm -f "$changelog_tmp"
+    die "CHANGELOG.md has no [Unreleased] section to prepare."
+  }
+
+  if ! awk -v header="## [$version] - " '
+    index($0, header) == 1 { found = 1; next }
+    found && /^## \[/ { exit }
+    found && /[^[:space:]]/ { has_notes = 1; exit }
+    END { exit !has_notes }
+  ' "$changelog_tmp"; then
+    rm -f "$changelog_tmp"
+    die "CHANGELOG.md has no Unreleased entries to prepare."
+  fi
+
+  mv "$changelog_tmp" CHANGELOG.md
+}
+
+prepare() {
+  local bump="" dry_run=false current version date branch
+
+  while (($#)); do
+    case "$1" in
+      --bump)
+        (($# >= 2)) || die "--bump requires patch, feature, or major."
+        bump="$2"
+        shift 2
+        ;;
+      --dry-run) dry_run=true; shift ;;
+      *) die "Unknown prepare option: $1" ;;
+    esac
+  done
+
+  if [[ -z "$bump" ]]; then
+    read -r -p "Release bump (patch, feature, or major): " bump
+  fi
+
+  current="$(version_from_mix)"
+  version="$(next_version "$current" "$bump")"
+  date="$(date -u +%F)"
+  branch="release/v$version"
+
+  if "$dry_run"; then
+    echo "Dry run: would prepare $version from $current ($bump) on $branch."
+    echo "Dry run: would update mix.exs and CHANGELOG.md, commit 'chore: release $version', push $branch, and open a draft PR."
+    return
+  fi
+
+  require_clean_tree
+  require_main_up_to_date
+  require_gh
+  ! git show-ref --verify --quiet "refs/heads/$branch" || die "Branch $branch already exists locally."
+  local remote_branch
+  remote_branch="$(git ls-remote --heads origin "refs/heads/$branch")" ||
+    die "Could not query branches on origin; check network and Git authentication."
+  [[ -z "$remote_branch" ]] || die "Branch $branch already exists on origin."
+  require_no_tag "v$version"
+
+  git switch -c "$branch" || die "Could not create release branch $branch."
+  sed -i.bak -E "s/^([[:space:]]*@version[[:space:]]+)\"$current\"/\1\"$version\"/" mix.exs
+  rm -f mix.exs.bak
+  rewrite_changelog "$version" "$date"
+  git add mix.exs CHANGELOG.md
+  git commit -m "chore: release $version" || die "Could not create release commit."
+  git push -u origin "$branch" || die "Could not push $branch; check Git authentication."
+  gh pr create --draft --base main --head "$branch" --title "chore: release $version" \
+    --body "Prepare release $version." || die "Could not open the draft GitHub pull request."
+
+  echo "Draft release PR opened for $version. Merge it before running publish from main."
+}
+
+publish() {
+  local dry_run=false hex_yes=false current notes_file
+
+  while (($#)); do
+    case "$1" in
+      --dry-run) dry_run=true; shift ;;
+      --yes) hex_yes=true; shift ;;
+      *) die "Unknown publish option: $1" ;;
+    esac
+  done
+
+  current="$(version_from_mix)"
+  require_release_notes "$current"
+
+  if "$dry_run"; then
+    echo "Dry run: validating local preflight for v$current; no Git, GitHub, or Hex publishing actions will occur."
+    preflight
+    echo "Dry run: local preflight passed; no package, tag, or release was published."
+    return
+  fi
+
+  require_clean_tree
+  require_main_up_to_date
+  require_gh
+  require_no_tag "v$current"
+  preflight
+
+  notes_file="$(mktemp)"
+  trap 'rm -f "$notes_file"' EXIT
+  release_notes "$current" >"$notes_file"
+
+  git tag -a "v$current" -m "v$current" || die "Could not create annotated tag v$current."
+  git push origin "v$current" || die "Could not push tag v$current; check Git authentication."
+  gh release create "v$current" --draft --title "v$current" --notes-file "$notes_file" ||
+    die "Could not create the draft GitHub release for v$current."
+
+  if "$hex_yes"; then
+    MIX_ENV=dev mix hex.publish --yes || die "Hex publish failed; the GitHub release remains a draft."
+  else
+    MIX_ENV=dev mix hex.publish || die "Hex publish failed; the GitHub release remains a draft."
+  fi
+
+  gh release edit "v$current" --draft=false ||
+    die "Hex publish succeeded, but publishing the GitHub release failed; publish the existing draft manually."
+  echo "Published nws_text $current to Hex and GitHub."
+}
+
+(($# >= 1)) || { usage >&2; exit 2; }
+command="$1"
+shift
+
+case "$command" in
+  prepare) prepare "$@" ;;
+  publish) publish "$@" ;;
+  -h|--help|help) usage ;;
+  *) usage >&2; die "Unknown command: $command" ;;
+esac
