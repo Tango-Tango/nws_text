@@ -1,0 +1,13 @@
+// .mashbill/config.jsonc: short values for the setup of nws_text.
+// Documentation: docs/repo-setup.md in the mashbill repo.
+{
+  // The Project agent runs this command to check its changes. It follows the CI checks
+  // (.github/workflows/ci.yml): compile without warnings, format, credo and the tests.
+  "test": "mix compile --warnings-as-errors && mix format --check-formatted && mix credo --strict && mix test",
+
+  "env": {
+    // For colors and correct terminal output.
+    "TERM": "xterm-256color",
+    // LANG is not here: mashbill sets it to en_US.UTF-8 itself. Elixir needs a UTF-8 locale.
+  },
+}
