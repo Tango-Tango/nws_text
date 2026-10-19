@@ -50,13 +50,24 @@ defmodule NwsText.Parser.Sections do
     |> lookahead_not(any_header)
     |> lookahead(ascii_char([?\s, ?\t]))
 
+  # A bulleted section also keeps unindented paragraphs that sit between it and the next bullet,
+  # such as a second flood stage in `* IMPACTS...`. Text after the last bullet is left out.
+  loose_line =
+    lookahead_not(choice([any_header, string("* "), delimiter, blank, date_line, spaces |> string("...")]))
+    |> concat(line)
+
+  loose_paragraphs = times(loose_line, min: 1) |> repeat(times(blank, min: 1) |> times(loose_line, min: 1))
+  bullet_gap = times(replace(blank, ""), min: 1) |> lookahead(loose_paragraphs |> repeat(blank) |> string("* "))
+
+  bullet_header = ignore(spaces) |> ignore(string("* ")) |> concat(paragraph_label) |> ignore(string("..."))
+  bullet = bullet_header |> concat(line) |> repeat(choice([paragraph_line, indented_gap, bullet_gap]))
   paragraph = header.(paragraph_label) |> concat(line) |> repeat(choice([paragraph_line, indented_gap]))
 
   # Actions span paragraphs. They end at a delimiter, a new label or bullet, a date line, or a headline.
   actions_stop = choice([any_header, string("* "), delimiter, date_line, spaces |> string("...")])
   actions = header.(actions_label) |> concat(line) |> repeat(lookahead_not(actions_stop) |> concat(line))
 
-  section = choice([actions, paragraph]) |> reduce({__MODULE__, :section, []})
+  section = choice([actions, bullet, paragraph]) |> reduce({__MODULE__, :section, []})
 
   defparsecp(:document, repeat(choice([section, ignore(line)])) |> eos())
 

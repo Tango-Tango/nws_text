@@ -26,7 +26,8 @@ Jason, then review any changes to `expected.json` before accepting them:
 MIX_ENV=test mix run --no-start test/fixtures/pyiem/build_manifest.exs
 ```
 
-`narrative/` holds five NWS flood statement bodies captured on 2026-10-13.
+`narrative/` holds NWS flood statement bodies: five captured on 2026-10-13 and
+`FLS_MLB_astor_two_stages.txt`, an Astor statement from 2026-10-19 with two impact stages.
 They have no WMO header, UGC, or VTEC lines and test `NwsText.parse_narrative/1`.
 Their expectations in `narrative_test.exs` are written by hand.
 

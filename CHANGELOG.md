@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A bulleted narrative section, such as `* IMPACTS...`, now keeps unindented paragraphs that sit
+  between it and the next bullet, for example a second flood stage impact.
+
 ## [0.1.0] - 2026-10-16
 
 ### Added
