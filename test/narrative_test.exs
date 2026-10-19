@@ -118,6 +118,28 @@ defmodule NwsText.NarrativeTest do
     refute impact =~ "PRECAUTIONARY"
   end
 
+  test "unindented paragraphs between two bullets stay in the first bullet" do
+    astor = narrative("narrative/FLS_MLB_astor_two_stages.txt")
+
+    assert labels(astor) == [
+             "PRECAUTIONARY/PREPAREDNESS ACTIONS",
+             "WHAT",
+             "WHERE",
+             "WHEN",
+             "IMPACT",
+             "ADDITIONAL DETAILS"
+           ]
+
+    impact = section(astor, "IMPACT").text
+    assert impact =~ ~r/^At 3\.0 feet, Water approaches/
+    assert impact =~ "to the river on McPherson Lane.\n\nAt 3.5 feet, Canals have overflowed into yards."
+    assert String.ends_with?(impact, "sea wall at Blair's Jungle Den.")
+    refute impact =~ "ADDITIONAL DETAILS"
+
+    text = "* WHAT...Flooding.\n\nNot followed by a bullet.\n\n$$\n"
+    assert narrative_text(text).sections == [%{label: "WHAT", text: "Flooding."}]
+  end
+
   test "double carriage returns count as one line break" do
     ama = narrative("pyiem/WSWAMA/WSWAMA_05.txt")
 
